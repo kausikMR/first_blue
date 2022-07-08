@@ -1,50 +1,38 @@
 package com.example.first_blue;
 
-import android.annotation.TargetApi;
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.os.Build;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
+import io.flutter.embedding.engine.plugins.activity.ActivityAware;
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
+import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
-import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
-import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
-import io.flutter.plugin.common.MethodChannel.Result;
 
-/** FirstBluePlugin */
-public class FirstBluePlugin implements FlutterPlugin, MethodCallHandler {
-  /// The MethodChannel that will the communication between Flutter and native Android
-  ///
-  /// This local reference serves to register the plugin with the Flutter Engine and unregister it
-  /// when the Flutter Engine is detached from the Activity
+
+public class FirstBluePlugin implements FlutterPlugin, ActivityAware {
+
   private MethodChannel methodChannel;
   private EventChannel eventChannel;
-  private BluetoothManager bluetoothManager;
-  private BluetoothAdapter bluetoothAdapter;
+  private BinaryMessenger binaryMessenger;
+  private BluetoothManager manager;
+  private BluetoothAdapter adapter;
   private Context context;
+  private Activity activity;
   private BroadcastReceiver bluetoothStateReceiver;
   private EventChannel.EventSink bluetoothStateEventSink;
 
-  @Override
-  public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
-    Log.v("FirstBluePlugin", "onAttachedToEngine");
-    context = flutterPluginBinding.getApplicationContext();
 
-    // method channel
-    methodChannel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "first_blue_method_channel");
-    methodChannel.setMethodCallHandler(this);
-
-    // event channel
-    eventChannel = new EventChannel(flutterPluginBinding.getBinaryMessenger(), "first_blue_event_channel");
-
+  public FirstBluePlugin(){
     bluetoothStateReceiver = new BroadcastReceiver() {
       @Override
       public void onReceive(Context context, Intent intent) {
@@ -67,67 +55,12 @@ public class FirstBluePlugin implements FlutterPlugin, MethodCallHandler {
         }
       }
     };
-
-    eventChannel.setStreamHandler(new EventChannel.StreamHandler() {
-      @Override
-      public void onListen(Object arguments, EventChannel.EventSink events) {
-        bluetoothStateEventSink = events;
-        context.registerReceiver(bluetoothStateReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
-        bluetoothStateEventSink.success(bluetoothAdapter.isEnabled());
-        Log.v("FirstBluePlugin", "Registered bluetooth state receiver");
-      }
-
-      @Override
-      public void onCancel(Object arguments) {
-        bluetoothStateEventSink = null;
-//        context.unregisterReceiver(bluetoothStateReceiver);
-        Log.v("FirstBluePlugin", "UnRegistered bluetooth state receiver");
-      }
-    });
-
-    bluetoothManager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
-    assert bluetoothManager != null; // assert bluetoothManager to be non null
-    bluetoothAdapter = bluetoothManager.getAdapter();
   }
-
-  private void requestPermissions(String[] permissions) {
-
-  }
-
-  @TargetApi(Build.VERSION_CODES.M)
-  private boolean isPermissionGranted(String permission) {
-    return context.checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED;
-  }
-
-    // methods
-    void requestToEnableBluetooth() {
-        if (!bluetoothAdapter.isEnabled()) {
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            context.startActivity(enableBtIntent);
-        }
-    }
-
-    private void turnOnBluetooth() {
-        requestToEnableBluetooth();
-    }
-
-    private void turnOffBluetooth(){
-        bluetoothAdapter.disable();
-    }
 
   @Override
-  public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
-    if (call.method.equals("getPlatformVersion")) {
-      result.success("Android " + android.os.Build.VERSION.RELEASE);
-    } else if (call.method.equals("turnOnBluetooth")) {
-      turnOnBluetooth();
-      result.success("Bluetooth turned on");
-    } else if (call.method.equals("turnOffBluetooth")){
-        turnOffBluetooth();
-        result.success("Bluetooth turned off");
-    } else {
-      result.notImplemented();
-    }
+  public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
+    Log.v("FirstBluePlugin", "onAttachedToEngine");
+    binaryMessenger = flutterPluginBinding.getBinaryMessenger();
   }
 
   @Override
@@ -135,5 +68,67 @@ public class FirstBluePlugin implements FlutterPlugin, MethodCallHandler {
     methodChannel.setMethodCallHandler(null);
     eventChannel.setStreamHandler(null);
     context.unregisterReceiver(bluetoothStateReceiver);
+  }
+
+  @Override
+  public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
+    Log.v("FirstBluePlugin", "onAttachedToActivity");
+    this.activity = binding.getActivity();
+    this.context = activity.getApplicationContext();
+    this.manager = (BluetoothManager) context.getSystemService(Context.BLUETOOTH_SERVICE);
+    this.adapter = manager.getAdapter();
+    if (adapter == null) {
+      Log.v("FirstBluePlugin", "Bluetooth not supported");
+      return;
+    }
+    // method channel
+    methodChannel = new MethodChannel(binaryMessenger, "first_blue_method_channel");
+    methodChannel.setMethodCallHandler(new FirstBlueMethodCallHandler(context,binding.getActivity(), adapter, manager));
+    // event channel
+    eventChannel = new EventChannel(binaryMessenger, "first_blue_event_channel");
+    eventChannel.setStreamHandler(new EventChannel.StreamHandler() {
+      @Override
+      public void onListen(Object arguments, EventChannel.EventSink events) {
+        bluetoothStateEventSink = events;
+        context.registerReceiver(bluetoothStateReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+        bluetoothStateEventSink.success(adapter.isEnabled());
+        Log.v("FirstBluePlugin", "Registered bluetooth state receiver");
+      }
+
+      @Override
+      public void onCancel(Object arguments) {
+        bluetoothStateEventSink = null;
+        context.unregisterReceiver(bluetoothStateReceiver);
+        Log.v("FirstBluePlugin", "UnRegistered bluetooth state receiver");
+      }
+    });
+
+  }
+
+  private void startDiscovery() {
+    if (adapter.isDiscovering()) {
+      adapter.startDiscovery();
+    }
+  }
+
+  private void stopDiscovery() {
+    if (adapter.isDiscovering()) {
+      adapter.cancelDiscovery();
+    }
+  }
+
+  @Override
+  public void onDetachedFromActivityForConfigChanges() {
+
+  }
+
+  @Override
+  public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
+
+  }
+
+  @Override
+  public void onDetachedFromActivity() {
+
   }
 }
