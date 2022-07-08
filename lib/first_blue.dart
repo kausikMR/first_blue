@@ -1,18 +1,37 @@
-import 'first_blue_platform_interface.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 class FirstBlue {
-  Future<String?> getPlatformVersion() {
-    return FirstBluePlatform.instance.getPlatformVersion();
+
+  FirstBlue._();
+
+  static final FirstBlue _instance = FirstBlue._();
+
+  static FirstBlue get instance => _instance;
+
+  final methodChannel = const MethodChannel('first_blue_method_channel');
+  final eventChannel = const EventChannel('first_blue_event_channel');
+
+  Future<void> turnOnBlue() async{
+    try {
+      await methodChannel.invokeMethod('turnOnBluetooth');
+    }catch(e){
+      debugPrint('Failed to turnOn: $e');
+    }
   }
 
-  Future<void> turnOnBluetooth(){
-    return FirstBluePlatform.instance.turnOnBluetooth();
+  Future<void> turnOffBlue() async{
+    try {
+      await methodChannel.invokeMethod('turnOffBluetooth');
+    }catch(e){
+      debugPrint('Failed to turnOff: $e');
+    }
   }
 
-  Future<void> turnOffBluetooth(){
-    return FirstBluePlatform.instance.turnOffBluetooth();
+  Stream<bool> blueStateStream() {
+    return eventChannel.receiveBroadcastStream().map((value) => value as bool);
   }
 
-  Stream<bool> get bluetoothStateStream => FirstBluePlatform.instance.bluetoothStateStream;
+
 
 }
