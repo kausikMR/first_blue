@@ -1,6 +1,8 @@
 import 'package:first_blue_example/discovery.dart';
 import 'package:flutter/material.dart';
 
+import 'custom_theme.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -14,7 +16,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-
   @override
   void initState() {
     super.initState();
@@ -22,8 +23,9 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: DiscoveryPage()
+    return MaterialApp(
+      theme: ThemeData(primarySwatch: primaryBlack),
+      home: const DiscoveryPage(),
     );
   }
 }
