@@ -13,6 +13,12 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
   final firstBlue = FirstBlue.instance;
 
   @override
+  void initState() {
+    super.initState();
+    // firstBlue.setDiscoveryFilter(BlueFilter.onlyDual);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -28,7 +34,24 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
           return discoveryListView();
         },
       ),
+      floatingActionButton: buildDiscoverButton(),
     );
+  }
+
+  Widget buildDiscoverButton() {
+    return StreamBuilder<bool>(
+        stream: firstBlue.discoveryState(),
+        builder: (context, snap) {
+          final isDiscovering = snap.data ?? false;
+          return FloatingActionButton(
+            onPressed: () {
+              if (!isDiscovering) {
+                firstBlue.startDiscovery();
+              }
+            },
+            child: Icon(isDiscovering ? Icons.stop : Icons.search),
+          );
+        });
   }
 
   Widget bluetoothTurnedOff() {
@@ -53,12 +76,22 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
         }
         if (snap.hasError) {
           return Center(
-            child: Text('Error : ${snap.error}'),
+            child: Text(
+              'Error : ${snap.error}',
+              style: const TextStyle(
+                fontSize: 16,
+              ),
+            ),
           );
         }
         final devices = snap.data ?? [];
         if (devices.isEmpty) {
-          return const Center(child: Text('No Devices Found'));
+          return const Center(
+            child: Text(
+              'No Devices Found',
+              style: TextStyle(fontSize: 16),
+            ),
+          );
         }
         return ListView.builder(
           itemCount: devices.length,
@@ -72,9 +105,15 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
 
   Widget bluetoothDeviceItem(BlueDevice device) {
     return Card(
-        child: ListTile(
-      title: Text('Device ${device.name}'),
-      subtitle: Text('${device.address} | ${device.type.name}'),
-    ));
+      child: ListTile(
+        title: Text(
+          device.name,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          '${device.address} | ${device.type.name}',
+        ),
+      ),
+    );
   }
 }

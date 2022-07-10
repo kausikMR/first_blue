@@ -12,10 +12,18 @@ class FirstBlue {
   final methodChannel = const MethodChannel('first_blue_method_channel');
   final blueStateEventChannel =
       const EventChannel('first_blue_state_event_channel');
-  final discoveredDevicesEventChannel =
-      const EventChannel('discovered_devices_event_channel');
+  final discoveredDevicesEventChannel = const EventChannel('discovery_channel');
+  final discoveryStateChannel = const EventChannel('discovery_state_channel');
 
-  List<BlueDevice> _prevDiscoveredDevices = [];
+  Future<bool> isBlueOn() async {
+    try {
+      final isOn = await methodChannel.invokeMethod('isBlueOn') as bool;
+      return isOn;
+    } catch (e) {
+      debugPrint('Failed to get isOn : $e');
+      return false;
+    }
+  }
 
   Future<void> turnOnBlue() async {
     try {
@@ -59,6 +67,14 @@ class FirstBlue {
     }
   }
 
+  Future<void> setDiscoveryFilter(BlueFilter filter) async {
+    try {
+      return methodChannel.invokeMethod('setDiscoveryFilter', filter.name);
+    } on PlatformException catch (e) {
+      debugPrint('Failed to change Discovery Filter: $e');
+    }
+  }
+
   Stream<bool> blueState() {
     return blueStateEventChannel
         .receiveBroadcastStream()
@@ -67,13 +83,27 @@ class FirstBlue {
 
   Stream<List<BlueDevice>> discoveredDevices() {
     return discoveredDevicesEventChannel.receiveBroadcastStream().map((event) {
-      final device = BlueDevice.fromMap(Map<String, dynamic>.from(event));
-      if (_prevDiscoveredDevices.any((d) => d.address == device.address)) {
-        return _prevDiscoveredDevices;
-      }
-      final updatedList = [device, ..._prevDiscoveredDevices];
-      _prevDiscoveredDevices = updatedList;
-      return updatedList;
+      final devices = List<Map<dynamic, dynamic>>.from(event);
+      final blueDevices =
+          devices.map((device) => BlueDevice.fromMap(device)).toList();
+      return blueDevices;
     });
   }
+
+  Stream<bool> discoveryState() {
+    return discoveryStateChannel.receiveBroadcastStream().map((event) {
+      return event as bool;
+    });
+  }
+}
+
+enum BlueFilter {
+  all('All'),
+  onlyBLE('BLE'),
+  onlyClassic('Classic'),
+  onlyDual('Dual');
+
+  final String name;
+
+  const BlueFilter(this.name);
 }

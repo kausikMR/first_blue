@@ -3,14 +3,11 @@ package com.example.first_blue;
 import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
@@ -56,15 +53,20 @@ public class FirstBlueMethodCallHandler implements MethodCallHandler {
                 turnOffBluetooth();
                 result.success("Bluetooth turned off");
                 break;
+            case "isBlueOn":
+                result.success(isBlueOn());
+                break;
             case "startDiscovery":
                 ensurePermissions();
-                FirstBluePlugin.registerReceiver(discoveryReceiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
-                Log.v("FirstBluePlugin", "Registered discovery receiver");
                 startDiscovery();
+                FirstBluePlugin.registerDiscoveryReceiver(discoveryReceiver);
                 break;
             case "stopDiscovery":
                 stopDiscovery();
                 FirstBluePlugin.unregisterReceiver(discoveryReceiver);
+                break;
+            case "setDiscoveryFilter":
+                FirstBluePlugin.setDiscoveryFilter(call.arguments.toString());
                 break;
             default:
                 result.notImplemented();
@@ -73,7 +75,7 @@ public class FirstBlueMethodCallHandler implements MethodCallHandler {
     }
 
     void requestToEnableBluetooth() {
-        if (!adapter.isEnabled()) {
+        if (!isBlueOn()) {
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             enableBtIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(enableBtIntent);
@@ -88,8 +90,16 @@ public class FirstBlueMethodCallHandler implements MethodCallHandler {
         adapter.disable();
     }
 
+    private boolean isBlueOn() {
+        try {
+            return adapter.isEnabled();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private void startDiscovery() {
-        if (adapter.isDiscovering()) {
+        if (!adapter.isDiscovering()) {
             adapter.startDiscovery();
         }
     }
@@ -102,13 +112,13 @@ public class FirstBlueMethodCallHandler implements MethodCallHandler {
 
     // Permission handlers
     private void ensurePermissions() {
-        if (!isGranted(Manifest.permission.ACCESS_COARSE_LOCATION) || !isGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+        if (isNotGranted(Manifest.permission.ACCESS_COARSE_LOCATION) || isNotGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION});
         }
     }
 
-    private boolean isGranted(String permission) {
-        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED;
+    private boolean isNotGranted(String permission) {
+        return ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED;
     }
 
     private void requestPermissions(String[] permissions) {

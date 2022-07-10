@@ -1,5 +1,3 @@
-
-
 enum DeviceType {
   classic('Classic'),
   ble('BLE'),
@@ -22,10 +20,10 @@ class BlueDevice {
     required this.type,
   });
 
-  factory BlueDevice.fromMap(Map<String, dynamic> map) {
+  factory BlueDevice.fromMap(Map<dynamic, dynamic> map) {
     return BlueDevice(
-      name: map['name'].toString(),
-      address: map['address'].toString(),
+      name: map['name'] ?? 'Unknown',
+      address: map['address'] ?? 'Unknown',
       type: _getDeviceType(int.tryParse(map['type'].toString()) ?? 0),
     );
   }
