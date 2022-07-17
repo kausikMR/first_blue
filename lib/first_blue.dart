@@ -20,7 +20,7 @@ class FirstBlue {
       final isOn = await methodChannel.invokeMethod('isBlueOn') as bool;
       return isOn;
     } catch (e) {
-      debugPrint('Failed to get isOn : $e');
+      debugPrint('Failed to get isBlueOn : $e');
       return false;
     }
   }

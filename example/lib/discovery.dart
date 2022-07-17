@@ -10,19 +10,27 @@ class DiscoveryPage extends StatefulWidget {
 }
 
 class _DiscoveryPageState extends State<DiscoveryPage> {
-  final firstBlue = FirstBlue.instance;
+  late final FirstBlue firstBlue;
+  late final Stream<bool> bluetoothState;
 
   @override
   void initState() {
     super.initState();
-    // firstBlue.setDiscoveryFilter(BlueFilter.onlyDual);
+    firstBlue = FirstBlue.instance;
+    bluetoothState = firstBlue.blueState();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint("building...");
     return Scaffold(
       appBar: AppBar(
-        title: const Text('First Blue'),
+        title: const Text('First Blue Example'),
       ),
       body: StreamBuilder<bool>(
         stream: firstBlue.blueState(),
