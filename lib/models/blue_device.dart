@@ -1,20 +1,9 @@
-enum DeviceType {
-  classic('Classic'),
-  ble('BLE'),
-  dual('Dual'),
-  unknown('Unknown');
-
-  final String name;
-
-  const DeviceType(this.name);
-}
-
 class BlueDevice {
   final String name;
   final String address;
   final DeviceType type;
 
-  BlueDevice({
+  const BlueDevice({
     required this.name,
     required this.address,
     required this.type,
@@ -40,4 +29,17 @@ class BlueDevice {
         return DeviceType.unknown;
     }
   }
+}
+
+/// Device type enum
+enum DeviceType {
+  unknown('UNKNOWN', 0),
+  classic('CLASSIC', 1),
+  ble('LE', 2),
+  dual('DUAL', 3);
+
+  final String name;
+  final int value;
+
+  const DeviceType(this.name, this.value);
 }

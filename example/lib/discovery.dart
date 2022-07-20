@@ -11,18 +11,11 @@ class DiscoveryPage extends StatefulWidget {
 
 class _DiscoveryPageState extends State<DiscoveryPage> {
   late final FirstBlue firstBlue;
-  late final Stream<bool> bluetoothState;
 
   @override
   void initState() {
     super.initState();
     firstBlue = FirstBlue.instance;
-    bluetoothState = firstBlue.blueState();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 
   @override
@@ -32,14 +25,21 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
       appBar: AppBar(
         title: const Text('First Blue Example'),
       ),
-      body: StreamBuilder<bool>(
-        stream: firstBlue.blueState(),
+      body: StreamBuilder<AppState>(
+        stream: firstBlue.appState(),
         builder: (context, snap) {
-          final isOn = snap.data ?? false;
-          if (!isOn) {
-            return bluetoothTurnedOff();
+          if (snap.data != null) {
+            final state = snap.data;
+            if (state == AppState.satisfied) {
+              return discoveryListView();
+            } else if (state == AppState.locationDisabled) {
+              return const Center(child: Text('Turn on Location'));
+            } else if (state == AppState.bluetoothDisabled) {
+              return bluetoothTurnedOff();
+            }
+            return const Center(child: Text('Something went wrong'));
           }
-          return discoveryListView();
+          return const Center(child: CircularProgressIndicator());
         },
       ),
       floatingActionButton: buildDiscoverButton(),
@@ -48,18 +48,19 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
 
   Widget buildDiscoverButton() {
     return StreamBuilder<bool>(
-        stream: firstBlue.discoveryState(),
-        builder: (context, snap) {
-          final isDiscovering = snap.data ?? false;
-          return FloatingActionButton(
-            onPressed: () {
-              if (!isDiscovering) {
-                firstBlue.startDiscovery();
-              }
-            },
-            child: Icon(isDiscovering ? Icons.stop : Icons.search),
-          );
-        });
+      stream: firstBlue.discoveryState(),
+      builder: (context, snap) {
+        final isDiscovering = snap.data ?? false;
+        return FloatingActionButton(
+          onPressed: () {
+            if (!isDiscovering) {
+              firstBlue.startDiscovery();
+            }
+          },
+          child: Icon(isDiscovering ? Icons.stop : Icons.search),
+        );
+      },
+    );
   }
 
   Widget bluetoothTurnedOff() {

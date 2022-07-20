@@ -10,14 +10,14 @@ class FirstBlue {
   static FirstBlue get instance => _instance;
 
   final methodChannel = const MethodChannel('first_blue_method_channel');
-  final blueStateEventChannel =
-      const EventChannel('first_blue_state_event_channel');
-  final discoveredDevicesEventChannel = const EventChannel('discovery_channel');
+  final blueStateChannel = const EventChannel('first_blue_state_event_channel');
+  final appStateChannel = const EventChannel('app_state_channel');
+  final discoveryChannel = const EventChannel('discovery_channel');
   final discoveryStateChannel = const EventChannel('discovery_state_channel');
 
   Future<bool> isBlueOn() async {
     try {
-      final isOn = await methodChannel.invokeMethod('isBlueOn') as bool;
+      final isOn = await methodChannel.invokeMethod('isBluetoothOn') as bool;
       return isOn;
     } catch (e) {
       debugPrint('Failed to get isBlueOn : $e');
@@ -75,17 +75,36 @@ class FirstBlue {
     }
   }
 
+  AppState _getAppState(String state) {
+    switch (state) {
+      case 'SATISFIED':
+        return AppState.satisfied;
+      case 'BLUETOOTH_DISABLED':
+        return AppState.bluetoothDisabled;
+      case 'LOCATION_DISABLED':
+        return AppState.locationDisabled;
+      default:
+        return AppState.error;
+    }
+  }
+
+  // Streams
   Stream<bool> blueState() {
-    return blueStateEventChannel
+    return blueStateChannel
         .receiveBroadcastStream()
         .map((value) => value as bool);
   }
 
+  Stream<AppState> appState() {
+    return appStateChannel.receiveBroadcastStream().map((event) =>
+        _getAppState(event as String));
+  }
+
   Stream<List<BlueDevice>> discoveredDevices() {
-    return discoveredDevicesEventChannel.receiveBroadcastStream().map((event) {
+    return discoveryChannel.receiveBroadcastStream().map((event) {
       final devices = List<Map<dynamic, dynamic>>.from(event);
       final blueDevices =
-          devices.map((device) => BlueDevice.fromMap(device)).toList();
+      devices.map((device) => BlueDevice.fromMap(device)).toList();
       return blueDevices;
     });
   }
@@ -106,4 +125,15 @@ enum BlueFilter {
   final String name;
 
   const BlueFilter(this.name);
+}
+
+enum AppState {
+  bluetoothDisabled('BLUETOOTH_DISABLED'),
+  locationDisabled('LOCATION_DISABLED'),
+  satisfied('SATISFIED'),
+  error('ERROR');
+
+  final String name;
+
+  const AppState(this.name);
 }

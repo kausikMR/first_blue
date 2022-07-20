@@ -12,6 +12,7 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -32,43 +33,29 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     // consts
     private val reqEnableBluetoothCode = 123
     private val reqPermissionsCode = 101
+    private val reqLocationCode = 908
 
     private lateinit var binaryMessenger: BinaryMessenger
     private lateinit var context: Context
     private lateinit var activity: Activity
     private lateinit var methodChannel: MethodChannel
+    private lateinit var appStateChannel: EventChannel
     private lateinit var blueStateChannel: EventChannel
     private lateinit var discoveryChannel: EventChannel
     private lateinit var discoveryStateChannel: EventChannel
+    private var appStateSink: EventSink? = null
     private var blueStateSink: EventSink? = null
     private var discoverySink: EventSink? = null
     private var discoveryStateSink: EventSink? = null
     private var bluetoothStateReceiver: BroadcastReceiver
     private lateinit var discoveryReceiver: BroadcastReceiver
+    private lateinit var locationStateReceiver: BroadcastReceiver
     private val prevDevices: MutableList<Map<String?, Any?>>
     private var locationManager: LocationManager? = null
     private var manager: BluetoothManager? = null
     private lateinit var adapter: BluetoothAdapter
     private var discoveryFilter = "All"
 
-//    private fun ensureLocationEnabled() {
-//        if (locationManager!!.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-//            return
-//        }
-//        ensureLocationPermissions()
-//    }
-
-    // Permission handlers
-    private fun ensureLocationPermissions() {
-        if (isNotGranted(Manifest.permission.ACCESS_COARSE_LOCATION) || isNotGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            requestPermissions(
-                arrayOf(
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                )
-            )
-        }
-    }
 
     private fun isNotGranted(permission: String): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -114,10 +101,15 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
 
     override fun onDetachedFromEngine(binding: FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
+        appStateChannel.setStreamHandler(null)
         blueStateChannel.setStreamHandler(null)
         discoveryChannel.setStreamHandler(null)
+        appStateSink = null
+        blueStateSink = null
+        discoverySink = null
         unregisterReceiver(bluetoothStateReceiver)
         unregisterReceiver(discoveryReceiver)
+        unregisterReceiver(locationStateReceiver)
     }
 
 
@@ -129,6 +121,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         adapter = manager!!.adapter
         // location
         locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        // Request permission result listener
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             binding.addRequestPermissionsResultListener { requestCode: Int, _: Array<String?>?, grantResults: IntArray ->
                 if (requestCode == reqPermissionsCode) {
@@ -147,6 +140,34 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         // method channel
         methodChannel = MethodChannel(binaryMessenger, "first_blue_method_channel")
         methodChannel.setMethodCallHandler(this)
+        // app state channel
+        appStateChannel = EventChannel(binaryMessenger, "app_state_channel")
+        appStateChannel.setStreamHandler(object : StreamHandler {
+            override fun onListen(arguments: Any?, events: EventSink?) {
+                appStateSink = events
+
+                if (isLocationEnabled() && isBluetoothOn()) {
+                    appStateSink?.success("SATISFIED");
+                } else if (!isBluetoothOn()) {
+                    appStateSink?.success("BLUETOOTH_DISABLED")
+                } else if (!isBluetoothOn()) {
+                    appStateSink?.success("LOCATION_DISABLED")
+                }
+
+                registerReceiver(
+                    bluetoothStateReceiver,
+                    IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+                )
+                registerReceiver(
+                    locationStateReceiver,
+                    IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION)
+                )
+            }
+
+            override fun onCancel(arguments: Any?) {
+                appStateSink = null
+            }
+        })
         // event channel
         blueStateChannel = EventChannel(binaryMessenger, "first_blue_state_event_channel")
         blueStateChannel.setStreamHandler(object : StreamHandler {
@@ -234,16 +255,24 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     init {
         prevDevices = ArrayList()
         bluetoothStateReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
                     val state =
                         intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                     Log.v("FirstBluePlugin", "onReceive: state=$state")
                     when (state) {
-                        BluetoothAdapter.STATE_ON -> blueStateSink!!.success(true)
-                        BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> blueStateSink!!.success(
-                            false
-                        )
+                        BluetoothAdapter.STATE_ON -> {
+                            blueStateSink?.success(true)
+                            if (isLocationEnabled()) {
+                                appStateSink?.success("SATISFIED")
+                            } else {
+                                appStateSink?.success("LOCATION_DISABLED")
+                            }
+                        }
+                        BluetoothAdapter.STATE_TURNING_OFF, BluetoothAdapter.STATE_OFF -> {
+                            blueStateSink?.success(false)
+                            appStateSink?.success("BLUETOOTH_DISABLED")
+                        }
                         else -> Log.v(
                             "FirstBluePlugin",
                             "Default Case handled BluetoothState: $state"
@@ -257,8 +286,8 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             }
         }
         discoveryReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                when (intent.action) {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
                     BluetoothDevice.ACTION_FOUND -> {
                         val device =
                             intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
@@ -294,6 +323,20 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                 return "DiscoveryReceiver"
             }
         }
+        locationStateReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    LocationManager.PROVIDERS_CHANGED_ACTION -> {
+                        if (isLocationEnabled() && isBluetoothOn()) {
+                            appStateSink?.success("SATISFIED")
+                        } else {
+                            appStateSink?.success("LOCATION_DISABLED")
+                        }
+                    }
+                }
+            }
+
+        }
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -304,12 +347,25 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             "turnOffBluetooth" -> {
                 turnOffBluetooth()
             }
+            "isBluetoothOn" -> {
+                result.success(isBluetoothOn())
+            }
             "startDiscovery" -> {
                 startDiscovery()
             }
             "stopDiscovery" -> {
                 cancelDiscovery()
             }
+            "isDiscovering" -> {
+                result.success(isDiscovering())
+            }
+            "ensurePermissions" -> {
+                ensureLocationPermissions()
+            }
+            "isLocationEnabled" -> {
+                result.success(isLocationEnabled())
+            }
+            else -> result.notImplemented()
         }
     }
 
@@ -339,15 +395,46 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     }
 
     private fun startDiscovery() {
-        if (adapter.isDiscovering) return
+        if (isDiscovering() || !isLocationEnabled()) return
         registerDiscoveryReceiver(discoveryReceiver)
         adapter.startDiscovery()
     }
 
     private fun cancelDiscovery() {
-        if (!adapter.isDiscovering) return
+        if (isDiscovering()) return
         unregisterReceiver(discoveryReceiver)
         adapter.cancelDiscovery()
+    }
+
+    private fun isDiscovering(): Boolean {
+        return adapter.isDiscovering
+    }
+
+    private fun isLocationEnabled(): Boolean {
+        val gpsEnabled: Boolean =
+            locationManager!!.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        val networkEnabled: Boolean =
+            locationManager!!.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        return (gpsEnabled || networkEnabled)
+    }
+
+    // Permission handlers
+    private fun ensureLocationPermissions() {
+        if (isNotGranted(Manifest.permission.ACCESS_COARSE_LOCATION) || isNotGranted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
+        } else {
+            ActivityCompat.startActivityForResult(
+                activity,
+                Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
+                reqLocationCode,
+                null
+            );
+        }
     }
 
 }
