@@ -18,7 +18,7 @@ Widget bluetoothDeviceItem(BlueDevice device) {
 
 Widget buildDiscoverButton(FirstBlue firstBlue) {
   return StreamBuilder<bool>(
-    stream: firstBlue.discoveryState(),
+    stream: firstBlue.discoveryState,
     builder: (context, snap) {
       final isDiscovering = snap.data ?? false;
       return FloatingActionButton(
@@ -48,7 +48,7 @@ Widget bluetoothTurnedOff(FirstBlue firstBlue) {
 
 Widget discoveryListView(FirstBlue firstBlue) {
   return StreamBuilder<List<BlueDevice>>(
-    stream: firstBlue.discoveredDevices(),
+    stream: firstBlue.discoveredDevices,
     builder: (context, snap) {
       if (snap.connectionState == ConnectionState.waiting) {
         return const Center(child: CircularProgressIndicator());

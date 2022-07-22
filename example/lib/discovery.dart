@@ -27,7 +27,7 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
         title: const Text('First Blue Example'),
         actions: [
           StreamBuilder<bool>(
-            stream: _firstBlue.discoverableState(),
+            stream: _firstBlue.discoverableState,
             builder: (context, snap) {
               final isDiscoverable = snap.data ?? false;
               return IconButton(
@@ -48,7 +48,7 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
         ],
       ),
       body: StreamBuilder<AppState>(
-        stream: _firstBlue.appState(),
+        stream: _firstBlue.appState,
         builder: (context, snap) {
           if (snap.data != null) {
             final state = snap.data;
