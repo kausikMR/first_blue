@@ -43,13 +43,15 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     private lateinit var blueStateChannel: EventChannel
     private lateinit var discoveryChannel: EventChannel
     private lateinit var discoveryStateChannel: EventChannel
+    private lateinit var discoverableStateChannel: EventChannel
     private var appStateSink: EventSink? = null
     private var blueStateSink: EventSink? = null
     private var discoverySink: EventSink? = null
     private var discoveryStateSink: EventSink? = null
+    private var discoverableStateSink: EventSink? = null
     private var bluetoothStateReceiver: BroadcastReceiver
-    private lateinit var discoveryReceiver: BroadcastReceiver
-    private lateinit var locationStateReceiver: BroadcastReceiver
+    private var discoveryReceiver: BroadcastReceiver
+    private var locationStateReceiver: BroadcastReceiver
     private val prevDevices: MutableList<Map<String?, Any?>>
     private var locationManager: LocationManager? = null
     private var manager: BluetoothManager? = null
@@ -147,7 +149,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                 appStateSink = events
 
                 if (isLocationEnabled() && isBluetoothOn()) {
-                    appStateSink?.success("SATISFIED");
+                    appStateSink?.success("SATISFIED")
                 } else if (!isBluetoothOn()) {
                     appStateSink?.success("BLUETOOTH_DISABLED")
                 } else if (!isBluetoothOn()) {
@@ -191,14 +193,13 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         discoveryChannel.setStreamHandler(object : StreamHandler {
             override fun onListen(args: Any?, events: EventSink?) {
                 discoverySink = events
-                registerDiscoveryReceiver(discoveryReceiver)
+                registerDiscoveryReceiver()
                 if (!adapter.isDiscovering) {
                     adapter.startDiscovery()
                 }
             }
 
             override fun onCancel(args: Any?) {
-                unregisterReceiver(discoveryReceiver)
                 adapter.cancelDiscovery()
             }
         })
@@ -207,11 +208,23 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             override fun onListen(args: Any?, events: EventSink?) {
                 discoveryStateSink = events
                 discoveryStateSink?.success(adapter.isDiscovering)
-                registerDiscoveryReceiver(discoveryReceiver)
+                registerDiscoveryReceiver()
             }
 
             override fun onCancel(args: Any?) {
                 if (discoveryStateSink == null) return
+                discoveryStateSink = null
+            }
+        })
+        discoverableStateChannel = EventChannel(binaryMessenger, "discoverable_state_channel")
+        discoverableStateChannel.setStreamHandler(object : StreamHandler {
+            override fun onListen(arguments: Any?, events: EventSink?) {
+                discoverableStateSink = events
+                discoveryStateSink?.success(isDiscoverable())
+                registerDiscoveryReceiver()
+            }
+
+            override fun onCancel(arguments: Any?) {
                 discoveryStateSink = null
             }
         })
@@ -222,15 +235,12 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     override fun onDetachedFromActivity() {}
 
 
-//    fun setDiscoveryFilter(filter: String) {
-//        discoveryFilter = filter
-//    }
-
-    fun registerDiscoveryReceiver(discoveryReceiver: BroadcastReceiver) {
+    fun registerDiscoveryReceiver() {
         val discoveryFilter = IntentFilter()
         discoveryFilter.addAction(BluetoothDevice.ACTION_FOUND)
         discoveryFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
         discoveryFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+        discoveryFilter.addAction(BluetoothAdapter.ACTION_SCAN_MODE_CHANGED)
         registerReceiver(discoveryReceiver, discoveryFilter)
     }
 
@@ -314,7 +324,13 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                     BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                         Log.v("FirstBluePlugin", "onReceive: ACTION_DISCOVERY_FINISHED")
                         discoveryStateSink?.success(false)
-                        unregisterReceiver(discoveryReceiver)
+                    }
+                    BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED -> {
+                        val isDiscoverable = intent.getIntExtra(
+                            BluetoothAdapter.EXTRA_SCAN_MODE,
+                            BluetoothAdapter.SCAN_MODE_NONE
+                        )
+                        discoverableStateSink?.success(isDiscoverable)
                     }
                 }
             }
@@ -359,6 +375,9 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             "isDiscovering" -> {
                 result.success(isDiscovering())
             }
+            "isDiscoverable" -> {
+                result.success(isDiscoverable())
+            }
             "ensurePermissions" -> {
                 ensureLocationPermissions()
             }
@@ -396,13 +415,13 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
 
     private fun startDiscovery() {
         if (isDiscovering() || !isLocationEnabled()) return
-        registerDiscoveryReceiver(discoveryReceiver)
+        registerDiscoveryReceiver()
         adapter.startDiscovery()
     }
 
     private fun cancelDiscovery() {
         if (isDiscovering()) return
-        unregisterReceiver(discoveryReceiver)
+//        unregisterReceiver(discoveryReceiver)
         adapter.cancelDiscovery()
     }
 
@@ -410,11 +429,15 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         return adapter.isDiscovering
     }
 
+    private fun isDiscoverable(): Boolean {
+        return adapter.scanMode == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE
+    }
+
     private fun isLocationEnabled(): Boolean {
         val gpsEnabled: Boolean =
-            locationManager!!.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            locationManager!!.isProviderEnabled(LocationManager.GPS_PROVIDER)
         val networkEnabled: Boolean =
-            locationManager!!.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+            locationManager!!.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         return (gpsEnabled || networkEnabled)
     }
 
@@ -433,7 +456,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                 Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
                 reqLocationCode,
                 null
-            );
+            )
         }
     }
 

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'custom_theme.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
