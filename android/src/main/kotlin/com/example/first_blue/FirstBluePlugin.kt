@@ -34,6 +34,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     private val reqEnableBluetoothCode = 123
     private val reqPermissionsCode = 101
     private val reqLocationCode = 908
+    private val defaultDiscoverableSeconds = 120
 
     private lateinit var binaryMessenger: BinaryMessenger
     private lateinit var context: Context
@@ -57,7 +58,6 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     private var manager: BluetoothManager? = null
     private lateinit var adapter: BluetoothAdapter
     private var discoveryFilter = "All"
-
 
     private fun isNotGranted(permission: String): Boolean {
         return ContextCompat.checkSelfPermission(
@@ -185,7 +185,6 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
 
             override fun onCancel(args: Any?) {
                 unregisterReceiver(bluetoothStateReceiver)
-                if (blueStateSink == null) return
                 blueStateSink = null
             }
         })
@@ -212,7 +211,6 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             }
 
             override fun onCancel(args: Any?) {
-                if (discoveryStateSink == null) return
                 discoveryStateSink = null
             }
         })
@@ -220,12 +218,12 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         discoverableStateChannel.setStreamHandler(object : StreamHandler {
             override fun onListen(arguments: Any?, events: EventSink?) {
                 discoverableStateSink = events
-                discoveryStateSink?.success(isDiscoverable())
+                discoverableStateSink?.success(isDiscoverable())
                 registerDiscoveryReceiver()
             }
 
             override fun onCancel(arguments: Any?) {
-                discoveryStateSink = null
+                discoverableStateSink = null
             }
         })
     }
@@ -325,11 +323,13 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                         Log.v("FirstBluePlugin", "onReceive: ACTION_DISCOVERY_FINISHED")
                         discoveryStateSink?.success(false)
                     }
-                    BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED -> {
-                        val isDiscoverable = intent.getIntExtra(
+                    BluetoothAdapter.ACTION_SCAN_MODE_CHANGED -> {
+                        val scanMode = intent.getIntExtra(
                             BluetoothAdapter.EXTRA_SCAN_MODE,
                             BluetoothAdapter.SCAN_MODE_NONE
                         )
+                        val isDiscoverable: Boolean =
+                            scanMode == BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE
                         discoverableStateSink?.success(isDiscoverable)
                     }
                 }
@@ -356,7 +356,10 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        when (call.method) {
+        val method = call.method;
+        val args = call.arguments;
+
+        when (method) {
             "turnOnBluetooth" -> {
                 turnOnBluetooth()
             }
@@ -383,6 +386,9 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             }
             "isLocationEnabled" -> {
                 result.success(isLocationEnabled())
+            }
+            "makeDiscoverable" -> {
+                makeDiscoverable(tryParseInt(args) ?: defaultDiscoverableSeconds)
             }
             else -> result.notImplemented()
         }
@@ -460,4 +466,22 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         }
     }
 
+    private fun makeDiscoverable(seconds: Int) {
+        val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+            .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, seconds)// duration in seconds
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        activity.startActivity(discoverableIntent)
+    }
+
+}
+
+/// helper-functions
+private fun tryParseInt(value: Any?): Int? {
+    val stringValue = value.toString()
+    try {
+        return Integer.parseInt(stringValue)
+    } catch (e: Exception) {
+        Log.v("FirstBluePlugin", "NON_FATAL: Failed to parse $stringValue as Int, $e");
+    }
+    return null
 }

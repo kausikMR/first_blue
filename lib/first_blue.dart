@@ -17,7 +17,7 @@ class FirstBlue {
   final discoveryChannel = const EventChannel('discovery_channel');
   final discoveryStateChannel = const EventChannel('discovery_state_channel');
   final discoverableStateChannel =
-  const EventChannel('discoverable_state_channel');
+      const EventChannel('discoverable_state_channel');
 
   /// getters
   ///
@@ -34,7 +34,7 @@ class FirstBlue {
   Future<bool> get isDiscovering async {
     try {
       final isDiscovering =
-      await methodChannel.invokeMethod('isDiscovering') as bool;
+          await methodChannel.invokeMethod('isDiscovering') as bool;
       return isDiscovering;
     } catch (e) {
       debugPrint('Failed to get isDiscovering: $e');
@@ -45,7 +45,7 @@ class FirstBlue {
   Future<bool> get isDiscoverable async {
     try {
       final isDiscoverable =
-      await methodChannel.invokeMethod('isDiscoverable') as bool;
+          await methodChannel.invokeMethod('isDiscoverable') as bool;
       return isDiscoverable;
     } catch (e) {
       debugPrint('Failed to get isDiscoverable: $e');
@@ -91,7 +91,7 @@ class FirstBlue {
       return discoveryChannel.receiveBroadcastStream().map((event) {
         final devices = List<Map<dynamic, dynamic>>.from(event);
         final blueDevices =
-        devices.map((device) => BlueDevice.fromMap(device)).toList();
+            devices.map((device) => BlueDevice.fromMap(device)).toList();
         return blueDevices;
       });
     } catch (e) {

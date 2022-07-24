@@ -23,9 +23,7 @@ Widget buildDiscoverButton(FirstBlue firstBlue) {
       final isDiscovering = snap.data ?? false;
       return FloatingActionButton(
         onPressed: () {
-          if (!isDiscovering) {
-            firstBlue.startDiscovery();
-          }
+          firstBlue.startDiscovery();
         },
         child: Icon(isDiscovering ? Icons.stop : Icons.search),
       );
