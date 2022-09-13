@@ -17,7 +17,7 @@ class FirstBlue {
   final discoveryChannel = const EventChannel('discovery_channel');
   final discoveryStateChannel = const EventChannel('discovery_state_channel');
   final discoverableStateChannel =
-      const EventChannel('discoverable_state_channel');
+  const EventChannel('discoverable_state_channel');
 
   /// getters
   ///
@@ -31,10 +31,28 @@ class FirstBlue {
     }
   }
 
+  Future<String> get name async {
+    try {
+      return await methodChannel.invokeMethod('getName') as String;
+    } catch (e) {
+      debugPrint('Failed to get name : $e');
+      return 'Unknown';
+    }
+  }
+
+  Future<String> get address async {
+    try {
+      return await methodChannel.invokeMethod('getAddress') as String;
+    } catch (e) {
+      debugPrint('Failed to get Address : $e');
+      return '';
+    }
+  }
+
   Future<bool> get isDiscovering async {
     try {
       final isDiscovering =
-          await methodChannel.invokeMethod('isDiscovering') as bool;
+      await methodChannel.invokeMethod('isDiscovering') as bool;
       return isDiscovering;
     } catch (e) {
       debugPrint('Failed to get isDiscovering: $e');
@@ -45,7 +63,7 @@ class FirstBlue {
   Future<bool> get isDiscoverable async {
     try {
       final isDiscoverable =
-          await methodChannel.invokeMethod('isDiscoverable') as bool;
+      await methodChannel.invokeMethod('isDiscoverable') as bool;
       return isDiscoverable;
     } catch (e) {
       debugPrint('Failed to get isDiscoverable: $e');
@@ -91,7 +109,7 @@ class FirstBlue {
       return discoveryChannel.receiveBroadcastStream().map((event) {
         final devices = List<Map<dynamic, dynamic>>.from(event);
         final blueDevices =
-            devices.map((device) => BlueDevice.fromMap(device)).toList();
+        devices.map((device) => BlueDevice.fromMap(device)).toList();
         return blueDevices;
       });
     } catch (e) {
@@ -108,6 +126,16 @@ class FirstBlue {
     } catch (e) {
       debugPrint('Failed to get discoverableState stream: $e');
       return Stream.value(false);
+    }
+  }
+
+  /// Setters
+  ///
+  Future<void> setName(String name) async {
+    try {
+      await methodChannel.invokeMethod('setName', name);
+    } catch (e) {
+      debugPrint('Failed to set Name, $e');
     }
   }
 
@@ -147,9 +175,10 @@ class FirstBlue {
     }
   }
 
-  Future<void> makeDiscoverable() async {
+  Future<void> makeDiscoverable(
+      [Duration duration = const Duration(seconds: 120)]) async {
     try {
-      await methodChannel.invokeMethod('makeDiscoverable');
+      await methodChannel.invokeMethod('makeDiscoverable', duration.inSeconds);
     } catch (e) {
       debugPrint('Failed to make Discoverable: $e');
     }

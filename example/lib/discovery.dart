@@ -34,7 +34,7 @@ class _DiscoveryPageState extends State<DiscoveryPage> {
                 splashRadius: 20,
                 onPressed: () {
                   if (!isDiscoverable) {
-                    _firstBlue.makeDiscoverable();
+                    _firstBlue.makeDiscoverable(const Duration(minutes: 5));
                   }
                 },
                 icon: Icon(

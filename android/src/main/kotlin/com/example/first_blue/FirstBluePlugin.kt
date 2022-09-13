@@ -1,10 +1,9 @@
 package com.example.first_blue
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
+import android.bluetooth.*
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -27,6 +26,10 @@ import io.flutter.plugin.common.EventChannel.StreamHandler
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.*
+import java.io.IOException
+import java.util.*
+
+private const val tag = "FirstBluePlugin"
 
 class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
 
@@ -35,6 +38,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     private val reqPermissionsCode = 101
     private val reqLocationCode = 908
     private val defaultDiscoverableSeconds = 120
+
 
     private lateinit var binaryMessenger: BinaryMessenger
     private lateinit var context: Context
@@ -97,7 +101,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPluginBinding) {
-        Log.v("FirstBluePlugin", "onAttachedToEngine")
+        Log.v(tag, "onAttachedToEngine")
         binaryMessenger = flutterPluginBinding.binaryMessenger
     }
 
@@ -116,7 +120,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
 
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-        Log.v("FirstBluePlugin", "onAttachedToActivity")
+        Log.v(tag, "onAttachedToActivity")
         activity = binding.activity
         context = activity.applicationContext
         manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -128,10 +132,10 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             binding.addRequestPermissionsResultListener { requestCode: Int, _: Array<String?>?, grantResults: IntArray ->
                 if (requestCode == reqPermissionsCode) {
                     if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                        Log.v("FirstBluePlugin", "Location Permission Granted")
+                        Log.v(tag, "Location Permission Granted")
                         return@addRequestPermissionsResultListener true
                     } else {
-                        Log.v("FirstBluePlugin", "Location Permission Denied, Retry")
+                        Log.v(tag, "Location Permission Denied, Retry")
                         ensureLocationPermissions()
                     }
                 }
@@ -180,7 +184,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                     IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
                 )
                 blueStateSink?.success(adapter.isEnabled)
-                Log.v("FirstBluePlugin", "Registered bluetooth state receiver")
+                Log.v(tag, "Registered bluetooth state receiver")
             }
 
             override fun onCancel(args: Any?) {
@@ -245,18 +249,18 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     fun registerReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
         try {
             context.registerReceiver(receiver, filter)
-            Log.v("FirstBluePlugin", "$receiver registered")
+            Log.v(tag, "$receiver registered")
         } catch (e: IllegalArgumentException) {
-            Log.v("FirstBluePlugin", "$receiver already registered")
+            Log.v(tag, "$receiver already registered")
         }
     }
 
     fun unregisterReceiver(receiver: BroadcastReceiver) {
         try {
             context.unregisterReceiver(receiver)
-            Log.v("FirstBluePlugin", "$receiver unRegistered")
+            Log.v(tag, "$receiver unRegistered")
         } catch (e: IllegalArgumentException) {
-            Log.v("FirstBluePlugin", receiver.toString() + "cannot be unRegistered")
+            Log.v(tag, receiver.toString() + "cannot be unRegistered")
         }
     }
 
@@ -267,7 +271,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                 if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
                     val state =
                         intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-                    Log.v("FirstBluePlugin", "onReceive: state=$state")
+                    Log.v(tag, "onReceive: state=$state")
                     when (state) {
                         BluetoothAdapter.STATE_ON -> {
                             blueStateSink?.success(true)
@@ -282,7 +286,7 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                             appStateSink?.success("BLUETOOTH_DISABLED")
                         }
                         else -> Log.v(
-                            "FirstBluePlugin",
+                            tag,
                             "Default Case handled BluetoothState: $state"
                         )
                     }
@@ -301,12 +305,13 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                             intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                         val deviceType = device?.type
                         val deviceName = device?.name ?: "Unknown"
-                        Log.v("FirstBluePlugin", "onReceive: device=$deviceName")
+                        val deviceAddress = device?.address ?: "Unknown"
                         val result: MutableMap<String?, Any?> = hashMapOf(
-                            "name" to (device?.name ?: "Unknown"),
-                            "address" to device?.address,
+                            "name" to deviceName,
+                            "address" to deviceAddress,
                             "type" to deviceType
                         )
+                        Log.v(tag, "onReceive: Device = $result")
                         if (isFiltered(deviceType)) {
                             handleDiscoverySink(result)
                         } else {
@@ -316,11 +321,11 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                     BluetoothAdapter.ACTION_DISCOVERY_STARTED -> {
                         // clear all the prev devices
                         prevDevices.clear()
-                        Log.v("FirstBluePlugin", "onReceive: ACTION_DISCOVERY_STARTED")
+                        Log.v(tag, "onReceive: ACTION_DISCOVERY_STARTED")
                         discoveryStateSink?.success(true)
                     }
                     BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
-                        Log.v("FirstBluePlugin", "onReceive: ACTION_DISCOVERY_FINISHED")
+                        Log.v(tag, "onReceive: ACTION_DISCOVERY_FINISHED")
                         discoveryStateSink?.success(false)
                     }
                     BluetoothAdapter.ACTION_SCAN_MODE_CHANGED -> {
@@ -356,10 +361,19 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
-        val method = call.method;
-        val args = call.arguments;
+        val method = call.method
+        val args = call.arguments
 
         when (method) {
+            "setName" -> {
+                setName(args.toString())
+            }
+            "getName" -> {
+                result.success(getName())
+            }
+            "getAddress" -> {
+                result.success(getAddress())
+            }
             "turnOnBluetooth" -> {
                 turnOnBluetooth()
             }
@@ -392,6 +406,19 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             }
             else -> result.notImplemented()
         }
+    }
+
+    private fun getName(): String {
+        return adapter.name
+    }
+
+    private fun setName(newName: String) {
+        adapter.name = newName
+    }
+
+    @SuppressLint("HardwareIds")
+    private fun getAddress(): String {
+        return adapter.address
     }
 
     private fun isBluetoothOn(): Boolean {
@@ -473,6 +500,59 @@ class FirstBluePlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         activity.startActivity(discoverableIntent)
     }
 
+    private inner class AcceptThread : Thread() {
+
+        private lateinit var mmServerSocket: BluetoothServerSocket
+
+        init {
+            try {
+                mmServerSocket =
+                    adapter.listenUsingInsecureRfcommWithServiceRecord("", UUID.randomUUID())
+            } catch (e: IOException) {
+                Log.e(tag, "Socket's listen() method failed", e)
+            }
+        }
+
+        override fun run() {
+            // Keep listening until exception occurs or a socket is returned.
+            var shouldLoop = true
+            while (shouldLoop) {
+                val socket: BluetoothSocket? = try {
+                    mmServerSocket.accept()
+                } catch (e: IOException) {
+                    Log.e(tag, "Socket's accept() method failed", e)
+                    shouldLoop = false
+                    null
+                }
+                socket?.also {
+//                    manageMyConnectedSocket(it)
+                    mmServerSocket.close()
+                    shouldLoop = false
+                }
+            }
+        }
+
+        // Closes the connect socket and causes the thread to finish.
+        fun cancel() {
+            try {
+                mmServerSocket.close()
+            } catch (e: IOException) {
+                Log.e(tag, "Could not close the connect socket", e)
+            }
+        }
+    }
+
+    private fun connectDeviceAtAddress(address: String, secure: Boolean = true) {
+        try {
+            val device: BluetoothDevice = adapter.getRemoteDevice(address)
+            val socket: BluetoothSocket =
+                secure device . createRfcommSocketToServiceRecord (UUID.randomUUID()) : device.createInsecureRfcommSocketToServiceRecord(UUID.randomUUID())
+            cancelDiscovery()
+        } catch (e: Exception) {
+            Log.v(tag, "Couldn't connect device, $e")
+        }
+    }
+
 }
 
 /// helper-functions
@@ -481,7 +561,7 @@ private fun tryParseInt(value: Any?): Int? {
     try {
         return Integer.parseInt(stringValue)
     } catch (e: Exception) {
-        Log.v("FirstBluePlugin", "NON_FATAL: Failed to parse $stringValue as Int, $e");
+        Log.v(tag, "NON_FATAL: Failed to parse $stringValue as Int, $e")
     }
     return null
 }
